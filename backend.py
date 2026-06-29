@@ -1,9 +1,10 @@
+import streamlit as st
 import os
 from dotenv import load_dotenv
 from groq import Groq
 
 load_dotenv()
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
 def get_working_model():
     """Available models lo okati auto select chestadi"""
