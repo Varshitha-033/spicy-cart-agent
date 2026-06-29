@@ -104,9 +104,9 @@ class CartCompilerAgent:
         )
         table = response.choices[0].message.content
 
-        # Manually build CART_DATA with URLs
-        cart_data_parts = [f"{i['name']}:{i['qty']}:{i['price']}:{i['url']}" for i in items_with_urls]
-        cart_data_string = ",".join(cart_data_parts)
+        # FIX: Use || as delimiter instead of : to avoid URL splitting
+        cart_data_parts = [f"{i['name']}||{i['qty']}||{i['price']}||{i['url']}" for i in items_with_urls]
+        cart_data_string = ",,".join(cart_data_parts) # Use,, to separate items
 
         return f"{table}\n\n[CART_DATA]{cart_data_string}"
 
