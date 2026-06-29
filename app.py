@@ -12,6 +12,8 @@ if "messages" not in st.session_state:
 def parse_cart_data(text):
     """Extract items with platform and URL from CART_DATA"""
     cart_data = []
+    seen_items = set()
+    
     cart_match = re.search(r'\[CART_DATA\](.*)', text, re.DOTALL)
     if cart_match:
         cart_string = cart_match.group(1).strip()
@@ -19,12 +21,17 @@ def parse_cart_data(text):
         
         for item in items:
             parts = item.split(':')
+            # FIX: Now expecting 5 parts - name:qty:price:platform:url
             if len(parts) >= 5:
                 name = parts[0].strip()
-                generic_names = ['item', 'product', 'grocery', 'total', '']
+                generic_names = ['item', 'product', 'grocery', 'total', 'items', '']
                 if name.lower() in generic_names or len(name) < 2:
                     continue
-                    
+                
+                if name.lower() in seen_items:
+                    continue
+                seen_items.add(name.lower())
+                
                 cart_data.append({
                     "name": name,
                     "qty": parts[1].strip(),
@@ -37,7 +44,7 @@ def parse_cart_data(text):
 def show_best_price_buttons(cart_data):
     """UI: Show button with platform name and price"""
     if not cart_data:
-        st.warning("No items found. Try a more specific request.")
+        st.warning("No specific items found. Try: 'chicken biryani' or 'cotton kurti'")
         return
         
     st.markdown("---")
@@ -50,14 +57,14 @@ def show_best_price_buttons(cart_data):
             label = f"{item['name']}\n₹{item['price']} on {item['platform']}"
             st.link_button(label, item['url'], use_container_width=True)
 
-# Chat UI - same as before but with new button function
+# Chat UI
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
         if "cart_data" in message and message["cart_data"]:
             show_best_price_buttons(message["cart_data"])
 
-if prompt := st.chat_input("Chicken biryani for 4..."):
+if prompt := st.chat_input("Chicken biryani for 4, or Cotton kurtis for girls..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
