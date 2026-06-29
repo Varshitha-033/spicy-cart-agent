@@ -10,7 +10,6 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 def parse_cart_data(text):
-    """Extract food items with Blinkit URL from CART_DATA"""
     cart_data = []
     seen_items = set()
 
@@ -36,7 +35,6 @@ def parse_cart_data(text):
     return cart_data
 
 def show_blinkit_buttons(cart_data):
-    """UI: Show Blinkit button for each ingredient"""
     if not cart_data:
         return
 
