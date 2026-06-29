@@ -21,7 +21,6 @@ def parse_cart_data(text):
             parts = item.split(':')
             if len(parts) >= 2:
                 name = parts[0].strip()
-                # (optional) lanti words teeseyyali
                 name = re.sub(r'\s*\(.*?\)', '', name).strip()
                 if name.lower()!= 'total':
                     cart_data.append({
@@ -38,13 +37,8 @@ def show_blinkit_buttons(cart_data):
         
     st.markdown("---")
     st.markdown("### 🛒 Add to Blinkit")
+    st.caption("Prati item button click chey → Blinkit lo open avtadi → Add kottey")
     
-    # Open All button
-    all_items = " ".join([item["name"] for item in cart_data])
-    search_query = urllib.parse.quote_plus(all_items)
-    st.link_button("🔥 Search All Items on Blinkit", f"https://blinkit.com/s/?q={search_query}", type="primary", use_container_width=True)
-    
-    st.markdown("**Or add individually:**")
     cols = st.columns(3)
     for idx, item in enumerate(cart_data):
         search_query = urllib.parse.quote_plus(item["name"])
@@ -60,7 +54,7 @@ for message in st.session_state.messages:
             show_blinkit_buttons(message["cart_data"])
 
 # User input
-if prompt := st.chat_input("Veg salad recipe 3 mandiki..."):
+if prompt := st.chat_input("Chicken biryani 4 mandiki..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -69,19 +63,13 @@ if prompt := st.chat_input("Veg salad recipe 3 mandiki..."):
         message_placeholder = st.empty()
         full_response = ""
         
-        # Stream response
         for chunk in ask_agent(prompt, stream=True):
             full_response += chunk
             message_placeholder.markdown(full_response + "▌")
         
-        # Parse CART_DATA
         cart_data = parse_cart_data(full_response)
-        
-        # Hide CART_DATA from display
         display_response = re.sub(r'\[CART_DATA\].*', '', full_response, flags=re.DOTALL).strip()
         message_placeholder.markdown(display_response)
-        
-        # Show Blinkit buttons
         show_blinkit_buttons(cart_data)
         
     st.session_state.messages.append({
