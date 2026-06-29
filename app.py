@@ -1,93 +1,90 @@
 import streamlit as st
-import re
-from backend import ask_agent, mcp_blinkit_search_tool
+import pandas as pd
+from backend import ask_agent
+import urllib.parse
 
-st.set_page_config(page_title="Smart Cart Agent - Food Only", page_icon="🛒")
-st.title("🛒 Smart Cart Agent")
-st.caption("Food & Recipe Ingredients Only | Powered by Blinkit")
+# Page configuration
+st.set_page_config(
+    page_title="Spicy Cart Agent",
+    page_icon="🛒",
+    layout="wide"
+)
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# Custom CSS for aesthetic theme
+st.markdown("""
+<style>
+ .stApp {
+        background-color: #0E1117;
+    }
+    h1 {
+        color: #FF4B4B!important;
+        text-align: center;
+        font-weight: 700;
+    }
+ .stButton>button {
+        background-color: #FF4B4B;
+        color: white;
+        border-radius: 10px;
+        border: none;
+        font-weight: 600;
+    }
+ .stButton>button:hover {
+        background-color: #E03E3E;
+        color: white;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-def parse_cart_data(text):
-    """Extract food items with Blinkit URL from CART_DATA"""
-    cart_data = []
-    seen_items = set()
+st.title("🛒 Spicy Cart Agent")
+st.caption("Your Instant Recipe Budget Planner - Powered by Groq LPU")
 
-    cart_match = re.search(r'\[CART_DATA\](.*)', text, re.DOTALL)
-    if cart_match:
-        cart_string = cart_match.group(1).strip()
-        # Split items by,, and fields by ||
-        items = cart_string.split(',,')
+st.subheader("What do you want to cook?")
 
-        for item in items:
-            parts = item.split('||')
-            # Format: name||qty||price||url
-            if len(parts) >= 4:
-                name = parts[0].strip()
-                if name.lower() in ['item', 'ingredient', 'total', ''] or len(name) < 2:
-                    continue
+question = st.text_input(
+    "Enter your query",
+    placeholder="Example: Chicken biryani recipe for 4 members with budget",
+    label_visibility="collapsed"
+)
 
-                if name.lower() in seen_items:
-                    continue
-                seen_items.add(name.lower())
-
-                cart_data.append({
-                    "name": name,
-                    "qty": parts[1].strip(),
-                    "price": parts[2].strip(),
-                    "url": parts[3].strip()
-                })
-    return cart_data
-
-def show_blinkit_buttons(cart_data):
-    """UI: Show Blinkit button for each ingredient"""
-    if not cart_data:
-        return
-
-    st.markdown("---")
-    st.markdown("### 🛒 Add to Blinkit Cart")
-    st.caption("Powered by MCP Server Tool: blinkit_search")
-
-    cols = st.columns(3)
-    for idx, item in enumerate(cart_data):
-        with cols[idx % 3]:
-            label = f"{item['name']}\n₹{item['price']}"
-            st.link_button(label, item['url'], use_container_width=True)
-
-# Chat UI
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-        if "cart_data" in message and message["cart_data"]:
-            show_blinkit_buttons(message["cart_data"])
-
-if prompt := st.chat_input("Chicken biryani for 4, or Weekly vegetables..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    with st.chat_message("assistant"):
-        message_placeholder = st.empty()
-        full_response = ""
-
-        with st.spinner("ADK Agents: Finding ingredients..."):
-            for chunk in ask_agent(prompt, stream=True):
+if st.button("Generate Budget List", type="primary", use_container_width=True):
+    if question:
+        with st.spinner("Calculating your budget..."):
+            response_placeholder = st.empty()
+            full_response = ""
+            for chunk in ask_agent(question, stream=True):
                 full_response += chunk
-                message_placeholder.markdown(full_response + "▌")
+                response_placeholder.markdown(full_response + "▌")
+            response_placeholder.markdown(full_response)
 
-        cart_data = parse_cart_data(full_response)
-        display_response = re.sub(r'\[CART_DATA\].*', '', full_response, flags=re.DOTALL).strip()
-        message_placeholder.markdown(display_response)
+            # Auto Cart Generator
+            if "[CART_DATA]" in full_response:
+                try:
+                    cart_data = full_response.split("[CART_DATA]")[1].strip()
+                    items = cart_data.split(",")
+                    cart_list = []
+                    total = 0
 
-        if cart_data:
-            show_blinkit_buttons(cart_data)
+                    for item in items:
+                        name, qty, price = item.split(":")
+                        cart_list.append({
+                            "Item": name.strip(),
+                            "Quantity": qty.strip(),
+                            "Price (₹)": price.strip()
+                        })
+                        total += int(price.strip())
 
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": display_response,
-        "cart_data": cart_data
-    })
+                    st.write("---")
+                    st.subheader("🛒 Your Cart is Ready")
+                    st.dataframe(pd.DataFrame(cart_list), use_container_width=True, hide_index=True)
+                    st.metric("Estimated Total Budget", f"₹ {total}")
 
-st.markdown("---")
-st.caption("🔒 Security: No user data stored. Food & grocery only. API keys secured.")
+                    # Demo cart link for Blinkit
+                    cart_str = urllib.parse.quote(cart_data)
+                    demo_link = f"https://blinkit.com/cart?items={cart_str}"
+                    st.link_button("🛍️ Add to Blinkit Cart", demo_link, use_container_width=True)
+                    st.caption("Note: This is a demo link. Real integration requires Blinkit API access.")
+
+                except Exception as e:
+                    st.error("Unable to parse cart data from response.")
+    else:
+        st.warning("Please enter a query first.")
