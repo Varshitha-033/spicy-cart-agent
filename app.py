@@ -17,11 +17,12 @@ def parse_cart_data(text):
     cart_match = re.search(r'\[CART_DATA\](.*)', text, re.DOTALL)
     if cart_match:
         cart_string = cart_match.group(1).strip()
-        items = cart_string.split(',')
+        # FIX: Split items by,, and fields by ||
+        items = cart_string.split(',,')
 
         for item in items:
-            parts = item.split(':')
-            # Format: name:qty:price:url
+            parts = item.split('||')
+            # Format: name||qty||price||url
             if len(parts) >= 4:
                 name = parts[0].strip()
                 if name.lower() in ['item', 'ingredient', 'total', ''] or len(name) < 2:
@@ -52,6 +53,7 @@ def show_blinkit_buttons(cart_data):
     for idx, item in enumerate(cart_data):
         with cols[idx % 3]:
             label = f"{item['name']}\n₹{item['price']}"
+            # FIX: URL is now properly parsed
             st.link_button(label, item['url'], use_container_width=True)
 
 # Chat UI
