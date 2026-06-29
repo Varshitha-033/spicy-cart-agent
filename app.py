@@ -3,9 +3,9 @@ import re
 import urllib.parse
 from backend import ask_agent
 
-st.set_page_config(page_title="Spicy Cart Agent", page_icon="🛒")
-st.title("🛒 Spicy Cart Agent")
-st.caption("Ask for recipes, get shopping list with Blinkit links")
+st.set_page_config(page_title="Smart Cart Agent", page_icon="🛒")
+st.title("🛒 Smart Cart Agent")
+st.caption("Ask for any shopping list - recipes, party supplies, groceries. Get instant Blinkit links")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -37,7 +37,7 @@ def show_blinkit_buttons(cart_data):
         
     st.markdown("---")
     st.markdown("### 🛒 Add to Blinkit")
-    st.caption("Click each button to search on Blinkit, then add to cart")
+    st.caption("Click each item to search on Blinkit and add to cart")
     
     cols = st.columns(3)
     for idx, item in enumerate(cart_data):
@@ -54,7 +54,7 @@ for message in st.session_state.messages:
             show_blinkit_buttons(message["cart_data"])
 
 # Chat input
-if prompt := st.chat_input("Chicken biryani for 4 people..."):
+if prompt := st.chat_input("Party snacks for 10 people, or toiletries list..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
