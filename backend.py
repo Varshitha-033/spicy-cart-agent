@@ -38,18 +38,21 @@ class FoodParserAgent:
         self.role = """You are FoodParserAgent. CRITICAL RULES:
 1. ONLY accept food/recipe/cooking related requests
 2. If user asks for clothes, electronics, or non-food items, output exactly: NOT_FOOD_REQUEST
-3. For food requests, extract 3-6 SPECIFIC ingredient names with quantities
-4. NEVER use generic words like 'item', 'ingredient', 'product'
-5. Output format: One ingredient per line. Example: Basmati Rice 1kg
-6. If request is vague like 'biryani', list common ingredients"""
+3. For food requests, you MUST extract 4-6 SPECIFIC ingredient names with quantities. NEVER give less than 4.
+4. If user says 'biryani', you MUST list: Basmati Rice, Chicken, Onions, Yogurt, Biryani Masala, Oil
+5. If user says 'dosa', you MUST list: Dosa Batter, Oil, Potato, Onions, Curry Leaves, Mustard Seeds
+6. NEVER use generic words like 'item', 'ingredient', 'product'
+7. Output format: One ingredient per line. Example: Basmati Rice 1kg
+8. QUANTITY MANDATORY: Every line must have number + unit like 1kg, 500g, 1 packet"""
 
     def run(self, user_request):
         response = self.client.chat.completions.create(
             messages=[
                 {"role": "system", "content": self.role},
-                {"role": "user", "content": f"Extract food ingredients from: {user_request}"}
+                {"role": "user", "content": f"Extract 4-6 food ingredients from: {user_request}. Must give at least 4 items."}
             ],
-            model="llama-3.1-8b-instant", temperature=0.3,
+            model="llama-3.1-8b-instant",
+            temperature=0.7,
         )
         return response.choices[0].message.content
 
@@ -80,7 +83,7 @@ class CartCompilerAgent:
         # Parse items and add Blinkit URLs
         items_with_urls = []
         for line in priced_items.split('\n'):
-            if '|' in line and 'Total' not in line:
+            if '|' in line and 'Total' not in line and 'Item' not in line:
                 parts = [p.strip() for p in line.split('|')]
                 if len(parts) >= 3:
                     name = parts[0].strip()
@@ -104,9 +107,9 @@ class CartCompilerAgent:
         )
         table = response.choices[0].message.content
 
-        # FIX: Use || as delimiter instead of : to avoid URL splitting
+        # Use || as delimiter to avoid URL splitting
         cart_data_parts = [f"{i['name']}||{i['qty']}||{i['price']}||{i['url']}" for i in items_with_urls]
-        cart_data_string = ",,".join(cart_data_parts) # Use,, to separate items
+        cart_data_string = ",,".join(cart_data_parts)
 
         return f"{table}\n\n[CART_DATA]{cart_data_string}"
 
@@ -125,6 +128,18 @@ def ask_agent(user_question, stream=False):
 
     if "NOT_FOOD_REQUEST" in items:
         return "Sorry, I only help with food recipes and grocery ingredients. Try: 'Chicken biryani for 4' or 'Monthly vegetables list'"
+
+    # Safety check - minimum 3 items ensure chey
+    items_list = [i.strip() for i in items.split('\n') if i.strip() and len(i.strip()) > 2]
+
+    if len(items_list) < 3:
+        # Fallback: Common ingredients add chey
+        if "biryani" in user_question.lower():
+            items = "Basmati Rice 1kg\nChicken 500g\nOnions 250g\nYogurt 200g\nBiryani Masala 1 packet\nOil 100ml"
+        elif "dosa" in user_question.lower():
+            items = "Dosa Batter 1kg\nOil 200ml\nPotato 500g\nOnions 250g\nCurry Leaves 1 bunch\nMustard Seeds 50g"
+        else:
+            items = "Rice 1kg\nDal 500g\nOil 1L\nOnions 1kg\nTomatoes 500g\nSpices 1 packet"
 
     # Step 2: Price estimation
     priced = pricer.run(items)
