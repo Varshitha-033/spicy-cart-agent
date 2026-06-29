@@ -1,16 +1,16 @@
 import streamlit as st
 import re
-from backend import ask_agent
+from backend import ask_agent, mcp_blinkit_search_tool
 
-st.set_page_config(page_title="Smart Cart Agent", page_icon="🛒")
-st.title("🛒 Smart Cart Agent - Price Compare")
-st.caption("ADK Multi-Agent: Finds cheapest price across Blinkit, Flipkart, Amazon, Meesho")
+st.set_page_config(page_title="Smart Cart Agent - Food Only", page_icon="🛒")
+st.title("🛒 Smart Cart Agent")
+st.caption("Food & Recipe Ingredients Only | Powered by Blinkit")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 def parse_cart_data(text):
-    """Extract items with platform and URL from CART_DATA"""
+    """Extract food items with Blinkit URL from CART_DATA"""
     cart_data = []
     seen_items = set()
 
@@ -21,11 +21,10 @@ def parse_cart_data(text):
 
         for item in items:
             parts = item.split(':')
-            # FIX: Expecting 5 parts - name:qty:price:platform:url
-            if len(parts) >= 5:
+            # Format: name:qty:price:url
+            if len(parts) >= 4:
                 name = parts[0].strip()
-                generic_names = ['item', 'product', 'grocery', 'total', 'items', '']
-                if name.lower() in generic_names or len(name) < 2:
+                if name.lower() in ['item', 'ingredient', 'total', ''] or len(name) < 2:
                     continue
 
                 if name.lower() in seen_items:
@@ -36,25 +35,23 @@ def parse_cart_data(text):
                     "name": name,
                     "qty": parts[1].strip(),
                     "price": parts[2].strip(),
-                    "platform": parts[3].strip(),
-                    "url": parts[4].strip()
+                    "url": parts[3].strip()
                 })
     return cart_data
 
-def show_best_price_buttons(cart_data):
-    """UI: Show button with platform name and price"""
+def show_blinkit_buttons(cart_data):
+    """UI: Show Blinkit button for each ingredient"""
     if not cart_data:
-        st.warning("No specific items found. Try: 'chicken biryani' or 'cotton kurti'")
         return
 
     st.markdown("---")
-    st.markdown("### 💰 Best Prices Found")
-    st.caption("Powered by 4 MCP Tools: Blinkit, Flipkart, Amazon, Meesho")
+    st.markdown("### 🛒 Add to Blinkit Cart")
+    st.caption("Powered by MCP Server Tool: blinkit_search")
 
     cols = st.columns(3)
     for idx, item in enumerate(cart_data):
         with cols[idx % 3]:
-            label = f"{item['name']}\n₹{item['price']} on {item['platform']}"
+            label = f"{item['name']}\n₹{item['price']}"
             st.link_button(label, item['url'], use_container_width=True)
 
 # Chat UI
@@ -62,9 +59,9 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
         if "cart_data" in message and message["cart_data"]:
-            show_best_price_buttons(message["cart_data"])
+            show_blinkit_buttons(message["cart_data"])
 
-if prompt := st.chat_input("Chicken biryani for 4, or Cotton kurtis for girls..."):
+if prompt := st.chat_input("Chicken biryani for 4, or Weekly vegetables..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -73,7 +70,7 @@ if prompt := st.chat_input("Chicken biryani for 4, or Cotton kurtis for girls...
         message_placeholder = st.empty()
         full_response = ""
 
-        with st.spinner("ADK Agents: Searching 4 platforms for best prices..."):
+        with st.spinner("ADK Agents: Finding ingredients..."):
             for chunk in ask_agent(prompt, stream=True):
                 full_response += chunk
                 message_placeholder.markdown(full_response + "▌")
@@ -81,7 +78,9 @@ if prompt := st.chat_input("Chicken biryani for 4, or Cotton kurtis for girls...
         cart_data = parse_cart_data(full_response)
         display_response = re.sub(r'\[CART_DATA\].*', '', full_response, flags=re.DOTALL).strip()
         message_placeholder.markdown(display_response)
-        show_best_price_buttons(cart_data)
+
+        if cart_data:
+            show_blinkit_buttons(cart_data)
 
     st.session_state.messages.append({
         "role": "assistant",
@@ -90,4 +89,4 @@ if prompt := st.chat_input("Chicken biryani for 4, or Cotton kurtis for girls...
     })
 
 st.markdown("---")
-st.caption("🔒 Security: No user data stored. Prices are simulated for demo. Multi-agent ADK + MCP architecture.")
+st.caption("🔒 Security: No user data stored. Food & grocery only. API keys secured.")
