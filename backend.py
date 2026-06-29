@@ -44,7 +44,8 @@ def ask_agent(user_question, stream=False):
 1. Give a markdown table with columns: Item | Quantity | Approx Price (INR)
 2. Calculate total at the end
 3. End response with [CART_DATA]item:qty:price,item:qty:price,... for parsing
-4. Keep prices realistic for Indian markets"""
+4. Keep prices realistic for Indian markets
+5. Don't include 'Total' row in CART_DATA"""
         },
         {"role": "user", "content": user_question}
     ]
