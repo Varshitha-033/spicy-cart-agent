@@ -9,29 +9,26 @@ import re
 from groq import Groq
 import streamlit as st
 
-# FIX: Graceful handling - key lekapoina crash avadu
+# SECURITY: API keys loaded from environment/secrets with graceful fallback
 try:
     GROQ_KEY = st.secrets["GROQ_API_KEY"]
 except KeyError:
     st.error("Missing GROQ_API_KEY. Add it in Streamlit Cloud → Settings → Secrets")
     st.stop()
 
-# FIX: SERPAPI optional chesam - lekapoina estimated prices use avtay
 try:
     SERP_KEY = st.secrets["SERPAPI_KEY"]
     SERP_ENABLED = True
 except KeyError:
     SERP_KEY = None
-    SERP_ENABLED = False
+    SERP_ENABLED = False # Silent fallback - no UI warning
 
 class CartAgent:
     def __init__(self):
         self.llm = Groq(api_key=GROQ_KEY)
         self.search_endpoint = "https://serpapi.com/search"
         self.serp_enabled = SERP_ENABLED
-
-        if not self.serp_enabled:
-            st.info("ℹ️ SerpAPI key not found. Using estimated prices. Add SERPAPI_KEY in secrets for live prices.")
+        # Removed st.info - no UI warning now
 
     def generate_shopping_list(self, dish: str, people: int) -> dict:
         dish = self._sanitize_input(dish)
@@ -47,8 +44,7 @@ class CartAgent:
 
     def _reason_ingredients(self, dish: str, people: int) -> list:
         prompt = f"""List ALL ingredients needed for "{dish}" to serve {people} people.
-Format: "ingredient - quantity unit" per line. No explanations.
-Example: palak - 500g"""
+Format: "ingredient - quantity unit" per line. No explanations."""
         try:
             response = self.llm.chat.completions.create(
                 model="llama-3.3-70b-versatile",
@@ -74,6 +70,7 @@ Example: palak - 500g"""
                 if self.serp_enabled:
                     price_data = self._fetch_price_from_web(ingredient)
                 else:
+                    # Silent fallback to estimated prices
                     price_data = {"price": self._estimate_price(ingredient), "source": "Estimated"}
 
                 priced_items.append({
