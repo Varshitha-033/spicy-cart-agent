@@ -33,13 +33,21 @@ class CartAgent:
     def generate_shopping_list(self, dish: str, people: int) -> dict:
         """
         AGENT SKILL: Multi-step Reasoning + Tool Use + Computation
-        Pipeline: Dish → Ingredients → Prices → Total
+        FIX: Always get base for 1 person, then scale by people count
         """
         dish = self._sanitize_input(dish)
         people = max(1, min(people, 20))
-        ingredients = self._reason_ingredients(dish, people)
-        priced_items = self._use_search_tool(ingredients)
-        return self._calculate_total(priced_items, people)
+
+        # Step 1: Always get ingredients for 1 PERSON only
+        base_ingredients = self._reason_ingredients(dish, 1)
+
+        # Step 2: Get prices for 1 person base
+        base_priced_items = self._use_search_tool(base_ingredients)
+
+        # Step 3: Scale quantities and prices by people count
+        scaled_items = self._scale_for_people(base_priced_items, people)
+
+        return self._calculate_total(scaled_items, people)
 
     def _sanitize_input(self, dish: str) -> str:
         """SECURITY: Input sanitization against prompt injection"""
@@ -50,23 +58,17 @@ class CartAgent:
     def _reason_ingredients(self, dish: str, people: int) -> list:
         """
         AGENT SKILL: Reasoning
-        Uses LLM to decompose dish into ingredient list with MINIMAL quantities
+        Always generates for 1 PERSON base - we scale later
         """
-        if people == 1:
-            portion_note = "Use MINIMAL quantities - single meal portions only. Example: oil 1 tbsp not 100ml, onion 1 small not 250g"
-        else:
-            portion_note = f"Realistic quantities for {people} people"
-
         prompt = f"""You are a Smart Cart Agent for Indian grocery planning.
 
-Task: List ingredients for "{dish}" to serve {people} people.
+Task: List ingredients for "{dish}" for EXACTLY 1 PERSON - single serving only.
 
 CRITICAL RULES:
-1. {portion_note}
-2. Include ALL ingredients - spices, oil, salt everything
-3. Format: "ingredient - quantity unit" per line only
-4. No explanations, just the list
-5. For 1 person: Think single serving, hostel-style portions
+1. Use MINIMAL realistic quantities for ONE meal only
+2. Format: "ingredient - quantity unit" per line only
+3. No explanations, just the list
+4. Think hostel-style single serving
 
 Example for "palak paneer for 1":
 palak - 100g
@@ -81,7 +83,7 @@ turmeric - pinch
 salt - to taste
 cream - 1 tsp
 
-Now list ingredients for "{dish}" for {people} people:"""
+Now list ingredients for "{dish}" for 1 person:"""
 
         try:
             response = self.llm.chat.completions.create(
@@ -96,10 +98,7 @@ Now list ingredients for "{dish}" for {people} people:"""
             return [f"Error: {str(e)}"]
 
     def _use_search_tool(self, ingredients: list) -> list:
-        """
-        AGENT SKILL: Tool Use
-        For each ingredient, fetch live price from web via SerpAPI or use estimates
-        """
+        """AGENT SKILL: Tool Use - Get base prices for 1 person"""
         priced_items = []
         for item_line in ingredients:
             try:
@@ -117,17 +116,70 @@ Now list ingredients for "{dish}" for {people} people:"""
                 priced_items.append({
                     "item": ingredient,
                     "quantity": quantity,
-                    "price_inr": price_data["price"],
+                    "base_price_inr": price_data["price"], # Base price for 1 person
                     "source": price_data["source"]
                 })
             except:
                 priced_items.append({
                     "item": ingredient,
                     "quantity": quantity,
-                    "price_inr": 10,
+                    "base_price_inr": 10,
                     "source": "Estimated"
                 })
         return priced_items
+
+    def _scale_for_people(self, base_items: list, people: int) -> list:
+        """
+        AGENT SKILL: Computation
+        Scale quantities and prices linearly by people count
+        """
+        if people == 1:
+            return [{"item": i["item"], "quantity": i["quantity"],
+                    "price_inr": i["base_price_inr"], "source": i["source"]}
+                   for i in base_items]
+
+        scaled = []
+        for item in base_items:
+            scaled_qty = self._scale_quantity(item["quantity"], people)
+            scaled_price = item["base_price_inr"] * people
+
+            scaled.append({
+                "item": item["item"],
+                "quantity": scaled_qty,
+                "price_inr": scaled_price,
+                "source": item["source"]
+            })
+        return scaled
+
+    def _scale_quantity(self, qty_str: str, multiplier: int) -> str:
+        """Smart quantity scaling: 100g * 3 = 300g, 1 small * 3 = 3 small"""
+        try:
+            # Case 1: "100g", "1 tbsp", "75ml"
+            match = re.match(r'^(\d+(?:\.\d+)?)\s*([a-zA-Z]+)$', qty_str.strip())
+            if match:
+                num = float(match.group(1))
+                unit = match.group(2)
+                scaled_num = num * multiplier
+                # Integer chey if whole number
+                if scaled_num == int(scaled_num):
+                    return f"{int(scaled_num)}{unit}"
+                return f"{scaled_num:.1f}{unit}"
+
+            # Case 2: "1 small", "2 medium"
+            match = re.match(r'^(\d+)\s+(small|medium|large|tsp|tbsp|pinch)$', qty_str.strip(), re.IGNORECASE)
+            if match:
+                num = int(match.group(1))
+                unit = match.group(2)
+                return f"{num * multiplier} {unit}"
+
+            # Case 3: "to taste", "pinch" - don't scale
+            if qty_str.lower() in ['to taste', 'pinch', 'as needed']:
+                return qty_str
+
+            # Default: add x multiplier
+            return f"{qty_str} x{multiplier}"
+        except:
+            return f"{qty_str} x{multiplier}"
 
     def _fetch_price_from_web(self, ingredient: str) -> dict:
         """Tool: SerpAPI - Real-time price from Blinkit/Zepto"""
@@ -155,7 +207,7 @@ Now list ingredients for "{dish}" for {people} people:"""
     def _estimate_price(self, ingredient: str) -> int:
         """
         AGENT SKILL: Heuristic Reasoning
-        Smallest pack prices for single-person cooking - Blinkit 2026 rates
+        Base prices for 1 person single serving - Blinkit 2026 rates
         """
         price_map = {
             "onion": 8, "tomato": 10, "potato": 6, "palak": 10,
@@ -165,7 +217,7 @@ Now list ingredients for "{dish}" for {people} people:"""
             "oil": 25, "rice": 15, "atta": 12, "sugar": 10, "salt": 5, "dal": 20, "tur dal": 25,
             "turmeric": 5, "cumin": 8, "garam masala": 10, "chili powder": 5,
             "coriander powder": 5, "ginger-garlic paste": 8,
-            "ghee": 50, "bread": 25
+            "ghee": 50, "bread": 25, "bun": 15, "patty": 40
         }
 
         ingredient_lower = ingredient.lower()
@@ -175,20 +227,16 @@ Now list ingredients for "{dish}" for {people} people:"""
         return 10
 
     def _calculate_total(self, items: list, people: int) -> dict:
-        """
-        AGENT SKILL: Computation
-        Deterministic arithmetic: sum prices, add tax, format output
-        """
+        """AGENT SKILL: Computation"""
         total = sum(item["price_inr"] for item in items)
         return {
             "items": items,
             "total_inr": total,
             "people": people,
-            "agent_version": "CartAgent v1.0"
+            "agent_version": "CartAgent v1.1"
         }
 
     def is_greeting(self, text: str) -> bool:
-        """SECURITY: Greeting detection to avoid injection"""
         greetings = ['hi', 'hello', 'hey', 'namaste', 'hii']
         text_lower = text.lower().strip()
         return any(text_lower == g or text_lower.startswith(g + ' ') for g in greetings)
