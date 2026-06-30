@@ -17,13 +17,9 @@ import re
 from groq import Groq
 import streamlit as st
 
-# SECURITY: API keys loaded from environment/secrets only with fallback
-try:
-    GROQ_KEY = st.secrets["GROQ_API_KEY"] # Never expose in code
-    SERP_KEY = st.secrets["SERPAPI_KEY"]
-except KeyError as e:
-    st.error(f"Missing secret: {e}. Add keys in Streamlit Cloud → Settings → Secrets")
-    st.stop() # Stop app gracefully instead of crash
+# SECURITY: API keys loaded from environment/secrets only
+GROQ_KEY = st.secrets["GROQ_API_KEY"] # Never expose in code
+SERP_KEY = st.secrets["SERPAPI_KEY"]
 
 class CartAgent:
     """
