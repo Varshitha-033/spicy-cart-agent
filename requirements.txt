@@ -1,3 +1,5 @@
 streamlit
-groq
-requests
+langchain
+langchain-groq
+langchain-community
+google-search-results
